@@ -1,0 +1,39 @@
+name: Java CI - Classroom
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Download SQLite JDBC
+      run: |
+        mkdir -p lib
+        curl -L -o lib/sqlite-jdbc-3.49.1.0.jar https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.49.1.0/sqlite-jdbc-3.49.1.0.jar
+
+    - name: Compile
+      run: |
+        mkdir -p bin
+        javac -d bin -cp "lib/*" src/academic/model/*.java src/academic/driver/*.java
+
+    - name: Run smoke test
+      run: |
+        echo "TAMBAH_MAHASISWA#1142400#Silvia#Sistem Informasi" > input.txt
+        echo "TAMBAH_MATAKULIAH#IS301#Sistem Operasi#3" >> input.txt
+        echo "INPUT_NILAI#1142400#IS301#A" >> input.txt
+        echo "SIMPAN_KE_DB" >> input.txt
+        echo "CETAK_TRANSKRIP#1142400" >> input.txt
+        echo "---" >> input.txt
+        java -cp "bin:lib/*" academic.driver.Driver1 < input.txt

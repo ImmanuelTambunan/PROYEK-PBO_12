@@ -1,8 +1,8 @@
 package academic.driver;
-//12S24002
-//12S24004
-//12S24021
-//12S24034
+//12S24002_Petra Ignatius Sitorus
+//12S24004_Silvia Eklesiana Sitorus
+//12S24021_Ika Maria Manurung
+//12S24034_Immanuel Alexander Tambunan
 import academic.model.*;
 import java.sql.SQLException;
 import java.util.ArrayList;

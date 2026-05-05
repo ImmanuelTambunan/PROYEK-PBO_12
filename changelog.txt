@@ -11,3 +11,4 @@
 - Fitur: CETAK_TRANSKRIP (kalkulasi IPK otomatis)
 - Fitur: LIHAT_SEMUA (tampilkan seluruh data dari DB)
 - Database: SQLite (file-based, tanpa server)
+hai

@@ -1,0 +1,13 @@
+# Changelog
+
+## v1.0.0 (2026-05-02)
+- Initial release
+- Implementasi model: CivitasAkademika (abstract), Mahasiswa, Dosen, MataKuliah, Nilai
+- Implementasi DatabaseManager (Singleton JDBC untuk SQLite)
+- Implementasi AkademikORM (Custom ORM — mapping Objek ↔ SQL)
+- Implementasi Driver1 (CLI dengan perintah berbasis teks)
+- Fitur: TAMBAH_MAHASISWA, TAMBAH_DOSEN, TAMBAH_MATAKULIAH, INPUT_NILAI
+- Fitur: SIMPAN_KE_DB (flush buffer ke database)
+- Fitur: CETAK_TRANSKRIP (kalkulasi IPK otomatis)
+- Fitur: LIHAT_SEMUA (tampilkan seluruh data dari DB)
+- Database: SQLite (file-based, tanpa server)

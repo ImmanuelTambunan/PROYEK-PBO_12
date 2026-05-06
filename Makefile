@@ -1,4 +1,5 @@
 compile:
+	@if not exist bin mkdir bin
 	javac -d bin -cp "lib/*" src/academic/model/*.java src/academic/driver/*.java
 
 run: compile

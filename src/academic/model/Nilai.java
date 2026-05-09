@@ -1,34 +1,49 @@
 package academic.model;
 
+/**
+ * Nilai - Merepresentasikan nilai mahasiswa untuk satu mata kuliah.
+ * Menyimpan NIM, kode MK, dan huruf mutu (grade).
+ * Termasuk logika konversi huruf mutu → bobot (grade point).
+ */
 public class Nilai {
+
     private String nim;
-    private String kodeMk;
-    private String namaMk;
-    private int sks;
+    private String kodeMK;
     private String hurufMutu;
-    private int semester;
 
-    public Nilai(String nim, String kodeMk, String namaMk, int sks, String hurufMutu, int semester) {
+    // Field transient (diisi dari JOIN query saat cetak transkrip)
+    private String namaMK;
+    private int sks;
+
+    public Nilai() {}
+
+    public Nilai(String nim, String kodeMK, String hurufMutu) {
         this.nim = nim;
-        this.kodeMk = kodeMk;
-        this.namaMk = namaMk;
-        this.sks = sks;
+        this.kodeMK = kodeMK;
         this.hurufMutu = hurufMutu;
-        this.semester = semester;
     }
 
-    // Constructor backward-compatible tanpa semester
-    public Nilai(String nim, String kodeMk, String namaMk, int sks, String hurufMutu) {
-        this(nim, kodeMk, namaMk, sks, hurufMutu, 1);
-    }
+    // --- Getter & Setter ---
 
     public String getNim() { return nim; }
-    public String getKodeMk() { return kodeMk; }
-    public String getNamaMk() { return namaMk; }
-    public int getSks() { return sks; }
-    public String getHurufMutu() { return hurufMutu; }
-    public int getSemester() { return semester; }
+    public void setNim(String nim) { this.nim = nim; }
 
+    public String getKodeMK() { return kodeMK; }
+    public void setKodeMK(String kodeMK) { this.kodeMK = kodeMK; }
+
+    public String getHurufMutu() { return hurufMutu; }
+    public void setHurufMutu(String hurufMutu) { this.hurufMutu = hurufMutu; }
+
+    public String getNamaMK() { return namaMK; }
+    public void setNamaMK(String namaMK) { this.namaMK = namaMK; }
+
+    public int getSks() { return sks; }
+    public void setSks(int sks) { this.sks = sks; }
+
+    /**
+     * Mengkonversi huruf mutu menjadi bobot (grade point).
+     * Skala: A=4.0, AB=3.5, B=3.0, BC=2.5, C=2.0, D=1.0, E=0.0
+     */
     public double getBobot() {
         switch (hurufMutu.toUpperCase()) {
             case "A":  return 4.0;
@@ -44,7 +59,7 @@ public class Nilai {
 
     @Override
     public String toString() {
-        return String.format("%-10s %-35s %3d  %-5s %.1f  (Sem %d)",
-            kodeMk, namaMk, sks, hurufMutu, getBobot(), semester);
+        return kodeMK + " | " + (namaMK != null ? namaMK : "-") + " | "
+             + sks + " SKS | " + hurufMutu + " (" + getBobot() + ")";
     }
 }

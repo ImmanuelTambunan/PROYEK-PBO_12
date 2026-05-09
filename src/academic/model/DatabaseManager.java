@@ -5,84 +5,87 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/**
- * DatabaseManager - Mengelola koneksi JDBC ke database SQLite.
- * 
- * Konsep: JDBC — menggunakan DriverManager untuk membuat koneksi
- *         ke database file-based SQLite (tidak perlu server terpisah).
- *         Menggunakan pattern Singleton agar hanya ada 1 koneksi aktif.
- */
 public class DatabaseManager {
-
-    // SQLite menyimpan database sebagai file lokal
     private static final String DB_URL = "jdbc:sqlite:akademik.db";
-    private static Connection connection;
+    private static DatabaseManager instance;
+    private Connection connection;
 
-    /**
-     * Mendapatkan koneksi ke database (Singleton).
-     * Jika belum ada koneksi, buat baru.
-     */
-    public static Connection getConnection() throws SQLException {
-        if (connection == null || connection.isClosed()) {
+    private DatabaseManager() {
+        try {
             connection = DriverManager.getConnection(DB_URL);
+            initializeDatabase();
+        } catch (SQLException e) {
+            System.err.println("[ERROR] Gagal membuka koneksi database: " + e.getMessage());
         }
+    }
+
+    public static DatabaseManager getInstance() {
+        if (instance == null) {
+            instance = new DatabaseManager();
+        }
+        return instance;
+    }
+
+    public Connection getConnection() {
         return connection;
     }
 
-    /**
-     * Menutup koneksi database.
-     */
-    public static void closeConnection() {
-        if (connection != null) {
-            try {
+    public void closeConnection() {
+        try {
+            if (connection != null && !connection.isClosed()) {
                 connection.close();
-            } catch (SQLException e) {
-                System.err.println("[ERROR] Gagal menutup koneksi: " + e.getMessage());
             }
+        } catch (SQLException e) {
+            System.err.println("[ERROR] Gagal menutup koneksi: " + e.getMessage());
         }
     }
 
-    /**
-     * Inisialisasi skema database (DDL).
-     * Membuat tabel-tabel jika belum ada.
-     * Dipanggil sekali saat program pertama kali berjalan.
-     */
-    public static void initializeDatabase() {
-        String sqlMahasiswa = "CREATE TABLE IF NOT EXISTS mahasiswa ("
-                + " nim TEXT PRIMARY KEY,"
-                + " nama TEXT NOT NULL,"
-                + " prodi TEXT NOT NULL"
-                + ")";
+    private void initializeDatabase() throws SQLException {
+        Statement stmt = connection.createStatement();
 
-        String sqlDosen = "CREATE TABLE IF NOT EXISTS dosen ("
-                + " nidn TEXT PRIMARY KEY,"
-                + " nama TEXT NOT NULL,"
-                + " fakultas TEXT NOT NULL"
-                + ")";
+        stmt.execute("CREATE TABLE IF NOT EXISTS mahasiswa (" +
+            "nim TEXT PRIMARY KEY, " +
+            "nama TEXT NOT NULL, " +
+            "prodi TEXT NOT NULL)");
 
-        String sqlMataKuliah = "CREATE TABLE IF NOT EXISTS mata_kuliah ("
-                + " kode TEXT PRIMARY KEY,"
-                + " nama TEXT NOT NULL,"
-                + " sks INTEGER NOT NULL"
-                + ")";
+        stmt.execute("CREATE TABLE IF NOT EXISTS dosen (" +
+            "nidn TEXT PRIMARY KEY, " +
+            "nama TEXT NOT NULL, " +
+            "fakultas TEXT NOT NULL)");
 
-        String sqlNilai = "CREATE TABLE IF NOT EXISTS nilai ("
-                + " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                + " nim TEXT NOT NULL,"
-                + " kode_mk TEXT NOT NULL,"
-                + " huruf_mutu TEXT NOT NULL,"
-                + " FOREIGN KEY (nim) REFERENCES mahasiswa(nim),"
-                + " FOREIGN KEY (kode_mk) REFERENCES mata_kuliah(kode),"
-                + " UNIQUE(nim, kode_mk)"
-                + ")";
+        stmt.execute("CREATE TABLE IF NOT EXISTS mata_kuliah (" +
+            "kode TEXT PRIMARY KEY, " +
+            "nama TEXT NOT NULL, " +
+            "sks INTEGER NOT NULL)");
 
-        try (Statement stmt = getConnection().createStatement()) {
-            stmt.execute(sqlMahasiswa);
-            stmt.execute(sqlDosen);
-            stmt.execute(sqlMataKuliah);
-            stmt.execute(sqlNilai);
-        } catch (SQLException e) {
-            System.err.println("[ERROR] Gagal inisialisasi database: " + e.getMessage());
-        }
+        stmt.execute("CREATE TABLE IF NOT EXISTS nilai (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "nim TEXT NOT NULL, " +
+            "kode_mk TEXT NOT NULL, " +
+            "huruf_mutu TEXT NOT NULL, " +
+            "semester INTEGER NOT NULL DEFAULT 1, " +
+            "FOREIGN KEY (nim) REFERENCES mahasiswa(nim), " +
+            "FOREIGN KEY (kode_mk) REFERENCES mata_kuliah(kode), " +
+            "UNIQUE(nim, kode_mk))");
+
+        stmt.execute("CREATE TABLE IF NOT EXISTS users (" +
+            "username TEXT PRIMARY KEY, " +
+            "password_hash TEXT NOT NULL, " +
+            "role TEXT NOT NULL, " +
+            "ref_id TEXT)");
+
+        stmt.execute("CREATE TABLE IF NOT EXISTS audit_log (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "username TEXT NOT NULL, " +
+            "action TEXT NOT NULL, " +
+            "detail TEXT, " +
+            "timestamp TEXT NOT NULL)");
+
+        // Buat akun admin default jika belum ada
+        // Password default: admin123 (SHA-256)
+        stmt.execute("INSERT OR IGNORE INTO users (username, password_hash, role, ref_id) " +
+            "VALUES ('admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'ADMIN', NULL)");
+
+        stmt.close();
     }
 }

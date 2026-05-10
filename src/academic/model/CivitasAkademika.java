@@ -1,44 +1,62 @@
 package academic.model;
 
+import academic.interfaces.Printable;
+import academic.interfaces.Validatable;
+
 /**
- * CivitasAkademika - Kelas abstrak induk (parent class).
- * Merepresentasikan anggota civitas akademika (mahasiswa, dosen, dll).
- *
- * Konsep: INHERITANCE — kelas ini diturunkan ke Mahasiswa dan Dosen.
- *         ENCAPSULATION — field private, akses via getter/setter.
+ * CivitasAkademika — Abstract parent class.
+ * KONSEP: [1] ABSTRACTION, [2] INHERITANCE, [3] POLYMORPHISM,
+ *         [4] ENCAPSULATION, [5] INTERFACE, [15] SOLID LSP
  */
-public abstract class CivitasAkademika {
+public abstract class CivitasAkademika implements Printable, Validatable {
 
     private String id;
     private String nama;
-    private String unitKerja; // Prodi untuk mahasiswa, Fakultas untuk dosen
+    private String unitKerja;
 
-    public CivitasAkademika() {}
-
-    public CivitasAkademika(String id, String nama, String unitKerja) {
-        this.id = id;
-        this.nama = nama;
-        this.unitKerja = unitKerja;
+    protected CivitasAkademika() {}
+    protected CivitasAkademika(String id, String nama, String unitKerja) {
+        this.id = id; this.nama = nama; this.unitKerja = unitKerja;
     }
 
-    // --- Getter & Setter ---
+    public String getId()                      { return id; }
+    public void   setId(String id)             { this.id = id; }
+    public String getNama()                    { return nama; }
+    public void   setNama(String nama)         { this.nama = nama; }
+    public String getUnitKerja()               { return unitKerja; }
+    public void   setUnitKerja(String uk)      { this.unitKerja = uk; }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-
-    public String getNama() { return nama; }
-    public void setNama(String nama) { this.nama = nama; }
-
-    public String getUnitKerja() { return unitKerja; }
-    public void setUnitKerja(String unitKerja) { this.unitKerja = unitKerja; }
-
-    /**
-     * Metode abstrak — setiap subclass wajib mendefinisikan perannya sendiri.
-     */
+    // Abstract methods — wajib di-override subclass [1] ABSTRACTION
     public abstract String getPeran();
+    public abstract String getLabelId();
+    protected abstract String getUnitKerja_Label();
+
+    // Implementasi Printable [5] INTERFACE + [3] POLYMORPHISM
+    @Override
+    public String getRingkasan() {
+        return String.format("  %-12s | %-28s | %-22s | %s",
+            getId(), getNama(), getUnitKerja(), getPeran());
+    }
 
     @Override
-    public String toString() {
-        return getPeran() + " | " + id + " | " + nama + " | " + unitKerja;
+    public void cetak() {
+        System.out.println("  " + getLabelId() + " : " + getId());
+        System.out.println("  Nama         : " + getNama());
+        System.out.println("  " + getUnitKerja_Label() + " : " + getUnitKerja());
+        System.out.println("  Peran        : " + getPeran());
     }
+
+    // Implementasi Validatable [5] INTERFACE
+    @Override
+    public void validasi() throws IllegalStateException {
+        if (id == null || id.isBlank())
+            throw new IllegalStateException(getLabelId() + " tidak boleh kosong.");
+        if (nama == null || nama.isBlank())
+            throw new IllegalStateException("Nama tidak boleh kosong.");
+        if (unitKerja == null || unitKerja.isBlank())
+            throw new IllegalStateException(getUnitKerja_Label() + " tidak boleh kosong.");
+    }
+
+    @Override
+    public String toString() { return getPeran() + " | " + id + " | " + nama + " | " + unitKerja; }
 }

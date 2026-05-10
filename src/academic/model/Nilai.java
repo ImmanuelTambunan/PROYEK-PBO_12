@@ -1,65 +1,68 @@
 package academic.model;
 
+import academic.enums.HurufMutu;
+import academic.interfaces.Printable;
+import academic.interfaces.Validatable;
+
 /**
- * Nilai - Merepresentasikan nilai mahasiswa untuk satu mata kuliah.
- * Menyimpan NIM, kode MK, dan huruf mutu (grade).
- * Termasuk logika konversi huruf mutu → bobot (grade point).
+ * Nilai — Model data nilai mahasiswa per mata kuliah.
+ * KONSEP: [4] ENCAPSULATION, [5] INTERFACE, [6] ENUMERATION, [3] POLYMORPHISM
  */
-public class Nilai {
+public class Nilai implements Printable, Validatable {
 
-    private String nim;
-    private String kodeMK;
-    private String hurufMutu;
-
-    // Field transient (diisi dari JOIN query saat cetak transkrip)
-    private String namaMK;
-    private int sks;
+    private String    nim;
+    private String    kodeMK;
+    private HurufMutu hurufMutu;
+    private String    namaMK;  // diisi dari JOIN query
+    private int       sks;     // diisi dari JOIN query
 
     public Nilai() {}
 
-    public Nilai(String nim, String kodeMK, String hurufMutu) {
-        this.nim = nim;
-        this.kodeMK = kodeMK;
-        this.hurufMutu = hurufMutu;
+    public Nilai(String nim, String kodeMK, HurufMutu hurufMutu) {
+        this.nim = nim; this.kodeMK = kodeMK; this.hurufMutu = hurufMutu;
     }
 
-    // --- Getter & Setter ---
+    public Nilai(String nim, String kodeMK, String hurufMutu) {
+        this(nim, kodeMK, HurufMutu.fromString(hurufMutu));
+    }
 
-    public String getNim() { return nim; }
-    public void setNim(String nim) { this.nim = nim; }
+    public String    getNim()                    { return nim; }
+    public void      setNim(String nim)          { this.nim = nim; }
+    public String    getKodeMK()                 { return kodeMK; }
+    public void      setKodeMK(String k)         { this.kodeMK = k; }
+    public HurufMutu getHurufMutu()              { return hurufMutu; }
+    public void      setHurufMutu(HurufMutu hm)  { this.hurufMutu = hm; }
+    public void      setHurufMutu(String hm)     { this.hurufMutu = HurufMutu.fromString(hm); }
+    public String    getNamaMK()                 { return namaMK; }
+    public void      setNamaMK(String n)         { this.namaMK = n; }
+    public int       getSks()                    { return sks; }
+    public void      setSks(int s)               { this.sks = s; }
+    public double    getBobot()                  { return hurufMutu.getBobot(); }
+    public String    getHurufMutuStr()           { return hurufMutu.name(); }
 
-    public String getKodeMK() { return kodeMK; }
-    public void setKodeMK(String kodeMK) { this.kodeMK = kodeMK; }
+    @Override
+    public void cetak() {
+        System.out.printf("  %-8s | %-32s | %2d SKS | %-3s | %.1f%n",
+            kodeMK, namaMK != null ? namaMK : "-", sks,
+            hurufMutu.name(), getBobot());
+    }
 
-    public String getHurufMutu() { return hurufMutu; }
-    public void setHurufMutu(String hurufMutu) { this.hurufMutu = hurufMutu; }
+    @Override
+    public String getRingkasan() {
+        return String.format("%-8s | %-32s | %2d | %-3s | %.1f",
+            kodeMK, namaMK != null ? namaMK : "-", sks, hurufMutu.name(), getBobot());
+    }
 
-    public String getNamaMK() { return namaMK; }
-    public void setNamaMK(String namaMK) { this.namaMK = namaMK; }
-
-    public int getSks() { return sks; }
-    public void setSks(int sks) { this.sks = sks; }
-
-    /**
-     * Mengkonversi huruf mutu menjadi bobot (grade point).
-     * Skala: A=4.0, AB=3.5, B=3.0, BC=2.5, C=2.0, D=1.0, E=0.0
-     */
-    public double getBobot() {
-        switch (hurufMutu.toUpperCase()) {
-            case "A":  return 4.0;
-            case "AB": return 3.5;
-            case "B":  return 3.0;
-            case "BC": return 2.5;
-            case "C":  return 2.0;
-            case "D":  return 1.0;
-            case "E":  return 0.0;
-            default:   return 0.0;
-        }
+    @Override
+    public void validasi() throws IllegalStateException {
+        if (nim == null || nim.isBlank())    throw new IllegalStateException("NIM kosong.");
+        if (kodeMK == null || kodeMK.isBlank()) throw new IllegalStateException("Kode MK kosong.");
+        if (hurufMutu == null)               throw new IllegalStateException("Huruf mutu kosong.");
     }
 
     @Override
     public String toString() {
-        return kodeMK + " | " + (namaMK != null ? namaMK : "-") + " | "
-             + sks + " SKS | " + hurufMutu + " (" + getBobot() + ")";
+        return kodeMK + " | " + (namaMK != null ? namaMK : "-")
+            + " | " + sks + " SKS | " + hurufMutu.name() + " (" + getBobot() + ")";
     }
 }

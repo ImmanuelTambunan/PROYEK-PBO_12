@@ -5,18 +5,16 @@
 	<projects>
 	</projects>
 	<buildSpec>
-		<buildCommand>
-			<name>org.eclipse.jdt.core.javabuilder</name>
-			<arguments>
-			</arguments>
-		</buildCommand>
 	</buildSpec>
 	<natures>
-		<nature>org.eclipse.jdt.core.javanature</nature>
 	</natures>
 	<filteredResources>
 		<filter>
+<<<<<<< HEAD
 			<id>1778551417311</id>
+=======
+			<id>1778119374986</id>
+>>>>>>> eff831d55223d27153b70a1e7d98860fb782ded9
 			<name></name>
 			<type>30</type>
 			<matcher>

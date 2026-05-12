@@ -1,12 +1,9 @@
 package academic.driver;
 
 import academic.db.DatabaseManager;
-<<<<<<< HEAD
 import academic.enums.HurufMutu;
 import academic.enums.StatusAkademik;
 import academic.interfaces.Printable;
-=======
->>>>>>> c931b482621974a2d0cd18da577e510820955552
 import academic.model.*;
 import academic.model.Nilai;
 import academic.record.RingkasanTranskrip;
@@ -439,21 +436,14 @@ public class Driver1 {
     //  HANDLER CETAK TRANSKRIP
     // ===================================================================
 
-<<<<<<< HEAD
     private static void handleCetakTranskrip(String[] t) throws SQLException {
         if (t.length < 2) { System.out.println("[ERROR] Format: CETAK_TRANSKRIP#NIM"); return; }
         String nim = t[1].trim();
 
         Optional<Mahasiswa> mhsOpt = repoMhs.findById(nim);
         if (mhsOpt.isEmpty()) {
-            System.out.println("[ERROR] Mahasiswa NIM " + nim + " tidak ditemukan."); return;
-=======
-        // ORM: query database → objek Mahasiswa
-        Mahasiswa mhs = AkademikORM.selectMahasiswaByNim(nim).orElse(null);
-        if (mhs == null) {
-            System.out.println("[ERROR] Mahasiswa dengan NIM " + nim + " tidak ditemukan.");
+            System.out.println("[ERROR] Mahasiswa NIM " + nim + " tidak ditemukan.");
             return;
->>>>>>> c931b482621974a2d0cd18da577e510820955552
         }
 
         List<Nilai> daftarNilai = repoNilai.findByNim(nim);

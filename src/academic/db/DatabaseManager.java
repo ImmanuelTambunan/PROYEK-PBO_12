@@ -1,4 +1,4 @@
-package academic.model;
+package academic.db;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -16,6 +16,7 @@ public class DatabaseManager {
 
     // SQLite menyimpan database sebagai file lokal
     private static final String DB_URL = "jdbc:sqlite:akademik.db";
+    private static final String DB_FILE = "akademik.db";
     private static Connection connection;
 
     /**
@@ -25,6 +26,9 @@ public class DatabaseManager {
     public static Connection getConnection() throws SQLException {
         if (connection == null || connection.isClosed()) {
             connection = DriverManager.getConnection(DB_URL);
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute("PRAGMA foreign_keys = ON");
+            }
         }
         return connection;
     }
@@ -51,7 +55,8 @@ public class DatabaseManager {
         String sqlMahasiswa = "CREATE TABLE IF NOT EXISTS mahasiswa ("
                 + " nim TEXT PRIMARY KEY,"
                 + " nama TEXT NOT NULL,"
-                + " prodi TEXT NOT NULL"
+                + " prodi TEXT NOT NULL,"
+                + " status TEXT NOT NULL DEFAULT 'AKTIF'"
                 + ")";
 
         String sqlDosen = "CREATE TABLE IF NOT EXISTS dosen ("
@@ -84,5 +89,26 @@ public class DatabaseManager {
         } catch (SQLException e) {
             System.err.println("[ERROR] Gagal inisialisasi database: " + e.getMessage());
         }
+    }
+
+    public static boolean dropDatabase() {
+        closeConnection();
+        java.io.File dbFile = new java.io.File(DB_FILE);
+        if (!dbFile.exists()) {
+            System.out.println("[DB] File database tidak ditemukan, tidak ada yang dihapus.");
+            return false;
+        }
+
+        boolean deleted = dbFile.delete();
+        if (deleted) {
+            System.out.println("[DB] Database '" + DB_FILE + "' berhasil dihapus.");
+        } else {
+            System.err.println("[DB-ERROR] Gagal menghapus file database.");
+        }
+        return deleted;
+    }
+
+    public static String getDbFilePath() {
+        return DB_FILE;
     }
 }

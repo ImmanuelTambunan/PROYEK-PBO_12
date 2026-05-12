@@ -1,5 +1,6 @@
 package academic.driver;
 
+import academic.db.DatabaseManager;
 import academic.model.*;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -280,7 +281,7 @@ public class Driver1 {
         String nim = token[1];
 
         // ORM: query database → objek Mahasiswa
-        Mahasiswa mhs = AkademikORM.selectMahasiswaByNim(nim);
+        Mahasiswa mhs = AkademikORM.selectMahasiswaByNim(nim).orElse(null);
         if (mhs == null) {
             System.out.println("[ERROR] Mahasiswa dengan NIM " + nim + " tidak ditemukan.");
             return;

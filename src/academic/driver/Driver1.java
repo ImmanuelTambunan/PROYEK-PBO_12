@@ -1,367 +1,564 @@
 package academic.driver;
 
+import academic.db.DatabaseManager;
+import academic.enums.HurufMutu;
+import academic.enums.StatusAkademik;
+import academic.interfaces.Printable;
 import academic.model.*;
+import academic.model.Nilai;
+import academic.record.RingkasanTranskrip;
+import academic.repository.*;
+
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Scanner;
+import java.util.*;
 
 /**
- * Driver1.java — Program utama (entry point) CLI.
+ * Driver1 — Entry point CLI Sistem Pengelolaan Akademik.
  *
- * Program ini mengintegrasikan 4 konsep dalam satu alur:
- *   1. INHERITANCE  → CivitasAkademika → Mahasiswa, Dosen
- *   2. JCF          → ArrayList & HashMap untuk proses data di memori
- *   3. JDBC         → Koneksi dan query ke SQLite via DatabaseManager
- *   4. ORM (Custom) → AkademikORM memetakan Objek ↔ SQL
+ * KONSEP DITERAPKAN DI FILE INI:
+ *   [10] LOCAL CLASS      — class MenuFormatter di dalam method tampilkanMenu().
+ *   [11] ANONYMOUS CLASS  — Comparator sorting & Printable handler.
+ *   [13] JCF              — ArrayList & HashMap untuk buffer & lookup.
+ *   [3]  POLYMORPHISM     — objek diperlakukan via interface Printable.
+ *   [8]  GENERICS         — Repository<T> digunakan secara generic.
  *
- * Format perintah yang didukung:
- *   TAMBAH_MAHASISWA#NIM#Nama#Prodi
+ * FORMAT PERINTAH LANGSUNG (tetap didukung untuk CI/testing):
+ *   TAMBAH_MAHASISWA#NIM#Nama#Prodi[#Status]
  *   TAMBAH_DOSEN#NIDN#Nama#Fakultas
  *   TAMBAH_MATAKULIAH#Kode#Nama#SKS
  *   INPUT_NILAI#NIM#KodeMK#HurufMutu
  *   SIMPAN_KE_DB
  *   CETAK_TRANSKRIP#NIM
  *   LIHAT_SEMUA
- *   ---
+ *   HAPUS_MAHASISWA#NIM
+ *   HAPUS_DOSEN#NIDN
+ *   HAPUS_MATAKULIAH#Kode
+ *   HAPUS_NILAI#NIM#KodeMK
+ *   HAPUS_DATABASE
+ *   ---    <- keluar program
  */
 public class Driver1 {
 
-    // =====================================================================
-    // JCF: Data disimpan sementara di memori (ArrayList & HashMap)
-    // sebelum di-flush ke database saat perintah SIMPAN_KE_DB dipanggil.
-    // =====================================================================
-    private static List<Mahasiswa> bufferMahasiswa = new ArrayList<>();
-    private static List<Dosen> bufferDosen = new ArrayList<>();
-    private static List<MataKuliah> bufferMataKuliah = new ArrayList<>();
-    private static List<Nilai> bufferNilai = new ArrayList<>();
+    // ===================================================================
+    //  [13] JCF — Buffer memori (ArrayList & HashMap)
+    // ===================================================================
+    private static final List<Mahasiswa>  bufferMahasiswa  = new ArrayList<>();
+    private static final List<Dosen>      bufferDosen      = new ArrayList<>();
+    private static final List<MataKuliah> bufferMataKuliah = new ArrayList<>();
+    private static final List<Nilai>      bufferNilai      = new ArrayList<>();
 
-    // HashMap untuk lookup cepat di memori (JCF)
-    private static Map<String, Mahasiswa> mapMahasiswa = new HashMap<>();
-    private static Map<String, MataKuliah> mapMataKuliah = new HashMap<>();
+    // HashMap untuk lookup cepat di buffer — O(1)
+    private static final Map<String, Mahasiswa>  mapMahasiswa  = new HashMap<>();
+    private static final Map<String, MataKuliah> mapMataKuliah = new HashMap<>();
 
+    // Repository instances (Generic + SOLID DIP)
+    private static final MahasiswaRepository  repoMhs   = MahasiswaRepository.getInstance();
+    private static final DosenRepository      repoDsn   = DosenRepository.getInstance();
+    private static final MataKuliahRepository repoMK    = MataKuliahRepository.getInstance();
+    private static final NilaiRepository      repoNilai = NilaiRepository.getInstance();
+
+    private static final Scanner scanner = new Scanner(System.in);
+
+    // ===================================================================
+    //  MAIN
+    // ===================================================================
     public static void main(String[] args) {
-
-        // 1. Inisialisasi database (JDBC — buat tabel jika belum ada)
         DatabaseManager.initializeDatabase();
+        cetakHeader();
+        tampilkanMenu();
 
-        Scanner scanner = new Scanner(System.in);
-
-        System.out.println("========================================================");
-        System.out.println("  SISTEM PENGELOLAAN NILAI & REKAM JEJAK AKADEMIK");
-        System.out.println("  Inheritance | JCF | JDBC | Custom ORM");
-        System.out.println("========================================================");
-        System.out.println("Masukkan perintah (ketik '---' untuk mengakhiri):");
-        System.out.println();
-
-        // 2. Loop baca perintah dari user
         while (scanner.hasNextLine()) {
             String line = scanner.nextLine().trim();
 
-            // Sentinel: akhiri program
-            if (line.equals("---")) {
-                break;
-            }
+            if (line.equals("---")) break;
+            if (line.isEmpty())     { tampilkanMenu(); continue; }
 
-            if (line.isEmpty()) continue;
-
-            // Parse perintah
-            String[] token = line.split("#");
-            String perintah = token[0].toUpperCase();
-
-            try {
-                switch (perintah) {
-                    case "TAMBAH_MAHASISWA":
-                        handleTambahMahasiswa(token);
-                        break;
-                    case "TAMBAH_DOSEN":
-                        handleTambahDosen(token);
-                        break;
-                    case "TAMBAH_MATAKULIAH":
-                        handleTambahMataKuliah(token);
-                        break;
-                    case "INPUT_NILAI":
-                        handleInputNilai(token);
-                        break;
-                    case "SIMPAN_KE_DB":
-                        handleSimpanKeDB();
-                        break;
-                    case "CETAK_TRANSKRIP":
-                        handleCetakTranskrip(token);
-                        break;
-                    case "LIHAT_SEMUA":
-                        handleLihatSemua();
-                        break;
-                    default:
-                        System.out.println("[WARN] Perintah tidak dikenali: " + perintah);
-                }
-            } catch (Exception e) {
-                System.out.println("[ERROR] " + e.getMessage());
+            if (line.contains("#") || isDirectCommand(line)) {
+                prosesPerintahLangsung(line);
+            } else {
+                prosesPilihanMenu(line);
             }
         }
 
-        // 3. Tutup koneksi database
+        // Cek buffer belum disimpan sebelum keluar
+        if (!bufferMahasiswa.isEmpty() || !bufferDosen.isEmpty()
+                || !bufferMataKuliah.isEmpty() || !bufferNilai.isEmpty()) {
+            System.out.println("\n[INFO] Masih ada data di buffer yang belum disimpan.");
+            System.out.print("Simpan ke database sebelum keluar? (y/n): ");
+            if (scanner.hasNextLine()) {
+                String jawab = scanner.nextLine().trim();
+                if (jawab.equalsIgnoreCase("y")) {
+                    try { handleSimpanKeDB(); }
+                    catch (SQLException e) { System.out.println("[ERROR] " + e.getMessage()); }
+                }
+            }
+        }
+
         DatabaseManager.closeConnection();
         scanner.close();
-        System.out.println("\nProgram selesai. Koneksi database ditutup.");
+        System.out.println("\nProgram selesai. Sampai jumpa!");
     }
 
-    // =================================================================
-    //  HANDLER PERINTAH — masing-masing menggabungkan 4 konsep
-    // =================================================================
+    // ===================================================================
+    //  [10] LOCAL CLASS — tampilkanMenu menggunakan MenuFormatter
+    //  yang hanya hidup dalam scope method ini
+    // ===================================================================
+    private static void tampilkanMenu() {
+        /**
+         * MenuFormatter adalah LOCAL CLASS — hanya visible di dalam method ini.
+         * Bertugas memformat tampilan menu secara konsisten.
+         * Konsep: [10] LOCAL CLASS
+         */
+        class MenuFormatter {
+            static final String LINE = "  ----------------------------------------";
 
-    /**
-     * TAMBAH_MAHASISWA#NIM#Nama#Prodi
-     * Inheritance: membuat objek Mahasiswa (turunan CivitasAkademika)
-     * JCF: menyimpan ke bufferMahasiswa (ArrayList) & mapMahasiswa (HashMap)
-     */
-    private static void handleTambahMahasiswa(String[] token) {
-        if (token.length < 4) {
-            System.out.println("[ERROR] Format: TAMBAH_MAHASISWA#NIM#Nama#Prodi");
-            return;
+            String item(String no, String label) {
+                return String.format("  [%s]  %-34s", no, label);
+            }
+            void line()  { System.out.println(LINE); }
+            void grup(String judul) {
+                line();
+                System.out.printf("  %-40s%n", judul);
+                line();
+            }
         }
-        String nim = token[1];
-        String nama = token[2];
-        String prodi = token[3];
 
-        // Inheritance: instansiasi subclass Mahasiswa
-        Mahasiswa mhs = new Mahasiswa(nim, nama, prodi);
+        MenuFormatter fmt = new MenuFormatter();
+        System.out.println();
+        System.out.println("  MENU UTAMA");
+        fmt.grup("[ Data Akademik ]");
+        System.out.println(fmt.item("1", "Tambah Mahasiswa"));
+        System.out.println(fmt.item("2", "Tambah Dosen"));
+        System.out.println(fmt.item("3", "Tambah Mata Kuliah"));
+        System.out.println(fmt.item("4", "Input Nilai Mahasiswa"));
+        fmt.grup("[ Database & Laporan ]");
+        System.out.println(fmt.item("5", "Simpan Semua ke Database"));
+        System.out.println(fmt.item("6", "Cetak Transkrip Nilai"));
+        System.out.println(fmt.item("7", "Lihat Semua Data"));
+        System.out.println(fmt.item("8", "Hapus Data (Mhs/Dosen/MK/Nilai)"));
+        System.out.println(fmt.item("9", "Hapus Seluruh Database"));
+        fmt.grup("[ Sistem ]");
+        System.out.println(fmt.item("0", "Keluar  (atau ketik ---)"));
+        fmt.line();
+        System.out.print("\n  Pilih menu  : ");
+    }
 
-        // JCF: simpan ke ArrayList & HashMap
+    private static void cetakHeader() {
+        System.out.println("========================================================");
+        System.out.println("  SISTEM PENGELOLAAN NILAI & REKAM JEJAK AKADEMIK");
+        System.out.println("  Inheritance | JCF | JDBC | Custom ORM | SOLID");
+        System.out.println("========================================================");
+        System.out.println("  Masukkan nomor menu atau perintah langsung.");
+        System.out.println("  Ketik '---' untuk mengakhiri program.");
+    }
+
+    // ===================================================================
+    //  PROSES PILIHAN MENU INTERAKTIF
+    // ===================================================================
+    private static void prosesPilihanMenu(String pilihan) {
+        try {
+            switch (pilihan.trim()) {
+                case "1" -> menuTambahMahasiswa();
+                case "2" -> menuTambahDosen();
+                case "3" -> menuTambahMataKuliah();
+                case "4" -> menuInputNilai();
+                case "5" -> handleSimpanKeDB();
+                case "6" -> menuCetakTranskrip();
+                case "7" -> handleLihatSemua();
+                case "8" -> menuHapusData();
+                case "9" -> menuHapusDatabase();
+                case "0" -> {
+                    System.out.println("Keluar dari program...");
+                    DatabaseManager.closeConnection();
+                    System.exit(0);
+                }
+                default  -> System.out.println("[WARN] Pilihan tidak dikenali: " + pilihan);
+            }
+        } catch (Exception e) {
+            System.out.println("[ERROR] " + e.getMessage());
+        }
+        if (!pilihan.equals("0")) tampilkanMenu();
+    }
+
+    // ===================================================================
+    //  MENU INTERAKTIF — dipandu input satu per satu
+    // ===================================================================
+
+    private static void menuTambahMahasiswa() {
+        System.out.println("\n--- Tambah Mahasiswa ---");
+        System.out.print("  NIM    : "); String nim   = scanner.nextLine().trim();
+        System.out.print("  Nama   : "); String nama  = scanner.nextLine().trim();
+        System.out.print("  Prodi  : "); String prodi = scanner.nextLine().trim();
+        System.out.print("  Status (AKTIF/CUTI/LULUS/DO) [Enter=AKTIF]: ");
+        String statusStr = scanner.nextLine().trim();
+        StatusAkademik status = statusStr.isEmpty()
+            ? StatusAkademik.AKTIF : StatusAkademik.fromString(statusStr);
+        handleTambahMahasiswa(new String[]{"", nim, nama, prodi, status.name()});
+    }
+
+    private static void menuTambahDosen() {
+        System.out.println("\n--- Tambah Dosen ---");
+        System.out.print("  NIDN     : "); String nidn = scanner.nextLine().trim();
+        System.out.print("  Nama     : "); String nama = scanner.nextLine().trim();
+        System.out.print("  Fakultas : "); String fak  = scanner.nextLine().trim();
+        handleTambahDosen(new String[]{"", nidn, nama, fak});
+    }
+
+    private static void menuTambahMataKuliah() {
+        System.out.println("\n--- Tambah Mata Kuliah ---");
+        System.out.print("  Kode MK : "); String kode = scanner.nextLine().trim();
+        System.out.print("  Nama MK : "); String nama = scanner.nextLine().trim();
+        System.out.print("  SKS     : "); String sks  = scanner.nextLine().trim();
+        handleTambahMataKuliah(new String[]{"", kode, nama, sks});
+    }
+
+    private static void menuInputNilai() {
+        System.out.println("\n--- Input Nilai Mahasiswa ---");
+
+        // ================================================================
+        //  [11] ANONYMOUS CLASS — Printable anonim untuk tampilkan info enum
+        //  Tidak perlu buat class baru hanya untuk fungsi display sekali pakai.
+        // ================================================================
+        Printable infoHurufMutu = new Printable() {
+            @Override
+            public void cetak() {
+                System.out.println("  Huruf mutu yang tersedia:");
+                for (HurufMutu hm : HurufMutu.values()) {
+                    System.out.printf("    %-3s -> %.1f (%s)%n",
+                        hm.name(), hm.getBobot(), hm.getKeterangan());
+                }
+            }
+            @Override public String getRingkasan() { return "Info HurufMutu"; }
+        };
+        infoHurufMutu.cetak(); // [3] POLYMORPHISM — dipanggil via interface
+
+        System.out.print("\n  NIM Mahasiswa : "); String nim   = scanner.nextLine().trim();
+        System.out.print("  Kode MK       : "); String kode  = scanner.nextLine().trim();
+        System.out.print("  Huruf Mutu    : "); String huruf = scanner.nextLine().trim();
+        handleInputNilai(new String[]{"", nim, kode, huruf});
+    }
+
+    private static void menuCetakTranskrip() throws SQLException {
+        System.out.println("\n--- Cetak Transkrip Nilai ---");
+        System.out.print("  Masukkan NIM: ");
+        String nim = scanner.nextLine().trim();
+        handleCetakTranskrip(new String[]{"", nim});
+    }
+
+    private static void menuHapusData() throws SQLException {
+        System.out.println("\n--- Hapus Data ---");
+        System.out.println("  [1] Hapus Mahasiswa (termasuk nilai)");
+        System.out.println("  [2] Hapus Dosen");
+        System.out.println("  [3] Hapus Mata Kuliah (termasuk nilai)");
+        System.out.println("  [4] Hapus Nilai Tertentu");
+        System.out.print("  Pilih: ");
+        switch (scanner.nextLine().trim()) {
+            case "1" -> {
+                System.out.print("  NIM: ");
+                handleHapusMahasiswa(new String[]{"", scanner.nextLine().trim()});
+            }
+            case "2" -> {
+                System.out.print("  NIDN: ");
+                handleHapusDosen(new String[]{"", scanner.nextLine().trim()});
+            }
+            case "3" -> {
+                System.out.print("  Kode MK: ");
+                handleHapusMataKuliah(new String[]{"", scanner.nextLine().trim()});
+            }
+            case "4" -> {
+                System.out.print("  NIM: ");     String nim  = scanner.nextLine().trim();
+                System.out.print("  Kode MK: "); String kode = scanner.nextLine().trim();
+                handleHapusNilai(new String[]{"", nim, kode});
+            }
+            default -> System.out.println("[WARN] Pilihan tidak valid.");
+        }
+    }
+
+    private static void menuHapusDatabase() {
+        System.out.println("\n[PERINGATAN] Aksi ini akan menghapus SELURUH database secara permanen!");
+        System.out.print("Ketik 'HAPUS' untuk konfirmasi: ");
+        String k = scanner.nextLine().trim();
+        if (k.equals("HAPUS")) {
+            boolean ok = DatabaseManager.dropDatabase();
+            if (ok) {
+                System.out.println("[OK] Database dihapus. Membuat database baru...");
+                DatabaseManager.initializeDatabase();
+            }
+        } else {
+            System.out.println("[BATAL] Penghapusan database dibatalkan.");
+        }
+    }
+
+    // ===================================================================
+    //  PROSES PERINTAH LANGSUNG (#-separated)
+    // ===================================================================
+    private static final String[] DIRECT_CMDS = {
+        "TAMBAH_MAHASISWA","TAMBAH_DOSEN","TAMBAH_MATAKULIAH","INPUT_NILAI",
+        "SIMPAN_KE_DB","CETAK_TRANSKRIP","LIHAT_SEMUA",
+        "HAPUS_MAHASISWA","HAPUS_DOSEN","HAPUS_MATAKULIAH","HAPUS_NILAI","HAPUS_DATABASE"
+    };
+
+    private static boolean isDirectCommand(String line) {
+        String up = line.toUpperCase();
+        for (String cmd : DIRECT_CMDS) if (up.startsWith(cmd)) return true;
+        return false;
+    }
+
+    private static void prosesPerintahLangsung(String line) {
+        String[] token   = line.split("#");
+        String   perintah = token[0].trim().toUpperCase();
+        try {
+            switch (perintah) {
+                case "TAMBAH_MAHASISWA"  -> handleTambahMahasiswa(token);
+                case "TAMBAH_DOSEN"      -> handleTambahDosen(token);
+                case "TAMBAH_MATAKULIAH" -> handleTambahMataKuliah(token);
+                case "INPUT_NILAI"       -> handleInputNilai(token);
+                case "SIMPAN_KE_DB"      -> handleSimpanKeDB();
+                case "CETAK_TRANSKRIP"   -> handleCetakTranskrip(token);
+                case "LIHAT_SEMUA"       -> handleLihatSemua();
+                case "HAPUS_MAHASISWA"   -> handleHapusMahasiswa(token);
+                case "HAPUS_DOSEN"       -> handleHapusDosen(token);
+                case "HAPUS_MATAKULIAH"  -> handleHapusMataKuliah(token);
+                case "HAPUS_NILAI"       -> handleHapusNilai(token);
+                case "HAPUS_DATABASE"    -> menuHapusDatabase();
+                default -> System.out.println("[WARN] Perintah tidak dikenali: " + perintah);
+            }
+        } catch (Exception e) {
+            System.out.println("[ERROR] " + e.getMessage());
+        }
+    }
+
+    // ===================================================================
+    //  HANDLER TAMBAH
+    // ===================================================================
+
+    private static void handleTambahMahasiswa(String[] t) {
+        if (t.length < 4) { System.out.println("[ERROR] Format: TAMBAH_MAHASISWA#NIM#Nama#Prodi"); return; }
+        String nim = t[1].trim(), nama = t[2].trim(), prodi = t[3].trim();
+        String statusStr = (t.length >= 5) ? t[4].trim() : "AKTIF";
+        if (mapMahasiswa.containsKey(nim)) {
+            System.out.println("[SKIP] NIM " + nim + " sudah ada di buffer."); return;
+        }
+        Mahasiswa mhs = new Mahasiswa.Builder(nim, nama, prodi).status(statusStr).build();
         bufferMahasiswa.add(mhs);
         mapMahasiswa.put(nim, mhs);
-
-        // Polymorphism: memanggil getPeran() yang di-override
-        System.out.println("[OK] " + mhs.getPeran() + " ditambahkan ke buffer: "
-                + mhs.getNama() + " (NIM: " + mhs.getNim() + ")");
+        System.out.println("[OK] " + mhs.getPeran() + " -> buffer: "
+            + mhs.getNama() + " (NIM: " + mhs.getNim() + ") | " + mhs.getStatus());
     }
 
-    /**
-     * TAMBAH_DOSEN#NIDN#Nama#Fakultas
-     */
-    private static void handleTambahDosen(String[] token) {
-        if (token.length < 4) {
-            System.out.println("[ERROR] Format: TAMBAH_DOSEN#NIDN#Nama#Fakultas");
-            return;
-        }
-        String nidn = token[1];
-        String nama = token[2];
-        String fakultas = token[3];
-
-        Dosen dsn = new Dosen(nidn, nama, fakultas);
+    private static void handleTambahDosen(String[] t) {
+        if (t.length < 4) { System.out.println("[ERROR] Format: TAMBAH_DOSEN#NIDN#Nama#Fakultas"); return; }
+        Dosen dsn = new Dosen.Builder(t[1].trim(), t[2].trim(), t[3].trim()).build();
         bufferDosen.add(dsn);
-
-        System.out.println("[OK] " + dsn.getPeran() + " ditambahkan ke buffer: "
-                + dsn.getNama() + " (NIDN: " + dsn.getNidn() + ")");
+        System.out.println("[OK] " + dsn.getPeran() + " -> buffer: "
+            + dsn.getNama() + " (NIDN: " + dsn.getNidn() + ")");
     }
 
-    /**
-     * TAMBAH_MATAKULIAH#Kode#Nama#SKS
-     */
-    private static void handleTambahMataKuliah(String[] token) {
-        if (token.length < 4) {
-            System.out.println("[ERROR] Format: TAMBAH_MATAKULIAH#Kode#Nama#SKS");
-            return;
+    private static void handleTambahMataKuliah(String[] t) {
+        if (t.length < 4) { System.out.println("[ERROR] Format: TAMBAH_MATAKULIAH#Kode#Nama#SKS"); return; }
+        String kode = t[1].trim();
+        if (mapMataKuliah.containsKey(kode)) {
+            System.out.println("[SKIP] Kode " + kode + " sudah ada di buffer."); return;
         }
-        String kode = token[1];
-        String nama = token[2];
-        int sks = Integer.parseInt(token[3]);
-
-        MataKuliah mk = new MataKuliah(kode, nama, sks);
+        int sks;
+        try { sks = Integer.parseInt(t[3].trim()); }
+        catch (NumberFormatException e) { System.out.println("[ERROR] SKS harus angka."); return; }
+        MataKuliah mk = new MataKuliah.Builder(kode, t[2].trim(), sks).build();
         bufferMataKuliah.add(mk);
         mapMataKuliah.put(kode, mk);
-
-        System.out.println("[OK] Mata kuliah ditambahkan ke buffer: "
-                + mk.getNama() + " (" + mk.getKode() + ", " + mk.getSks() + " SKS)");
+        System.out.println("[OK] MataKuliah -> buffer: "
+            + mk.getNama() + " (" + mk.getKode() + ", " + mk.getSks() + " SKS)");
     }
 
-    /**
-     * INPUT_NILAI#NIM#KodeMK#HurufMutu
-     */
-    private static void handleInputNilai(String[] token) {
-        if (token.length < 4) {
-            System.out.println("[ERROR] Format: INPUT_NILAI#NIM#KodeMK#HurufMutu");
-            return;
-        }
-        String nim = token[1];
-        String kodeMK = token[2];
-        String hurufMutu = token[3];
-
-        Nilai nilai = new Nilai(nim, kodeMK, hurufMutu);
+    private static void handleInputNilai(String[] t) {
+        if (t.length < 4) { System.out.println("[ERROR] Format: INPUT_NILAI#NIM#KodeMK#HurufMutu"); return; }
+        HurufMutu hm;
+        try { hm = HurufMutu.fromString(t[3].trim()); }
+        catch (IllegalArgumentException e) { System.out.println("[ERROR] " + e.getMessage()); return; }
+        Nilai nilai = new Nilai(t[1].trim(), t[2].trim(), hm);
         bufferNilai.add(nilai);
-
-        System.out.println("[OK] Nilai ditambahkan ke buffer: NIM "
-                + nim + " | MK " + kodeMK + " | Nilai: " + hurufMutu
-                + " (bobot: " + nilai.getBobot() + ")");
+        System.out.println("[OK] Nilai -> buffer: NIM " + t[1].trim()
+            + " | MK " + t[2].trim() + " | " + hm.name()
+            + " (bobot: " + hm.getBobot() + ") — " + hm.getKeterangan());
     }
 
-    /**
-     * SIMPAN_KE_DB
-     * JDBC + ORM: semua data di buffer (JCF) dipetakan menjadi SQL
-     * dan disimpan ke database secara permanen.
-     */
+    // ===================================================================
+    //  HANDLER SIMPAN KE DB
+    // ===================================================================
+
     private static void handleSimpanKeDB() throws SQLException {
         System.out.println("\n--- Menyimpan data ke database ---");
         int total = 0;
 
-        // ORM + JDBC: Objek Mahasiswa → INSERT SQL
+        // [11] ANONYMOUS CLASS — Comparator sort mahasiswa by NIM sebelum insert
+        bufferMahasiswa.sort(new Comparator<Mahasiswa>() {
+            @Override public int compare(Mahasiswa a, Mahasiswa b) {
+                return a.getNim().compareTo(b.getNim());
+            }
+        });
+
         for (Mahasiswa mhs : bufferMahasiswa) {
-            try {
-                AkademikORM.insertMahasiswa(mhs);
-                total++;
-            } catch (SQLException e) {
-                if (e.getMessage().contains("UNIQUE") || e.getMessage().contains("PRIMARY KEY")) {
-                    System.out.println("[SKIP] Mahasiswa " + mhs.getNim() + " sudah ada di database.");
-                } else {
-                    throw e;
-                }
-            }
+            try { repoMhs.save(mhs); total++; }
+            catch (SQLException e) { skipOrThrow(e, "Mahasiswa", mhs.getNim()); }
         }
-
-        // ORM + JDBC: Objek Dosen → INSERT SQL
         for (Dosen dsn : bufferDosen) {
-            try {
-                AkademikORM.insertDosen(dsn);
-                total++;
-            } catch (SQLException e) {
-                if (e.getMessage().contains("UNIQUE") || e.getMessage().contains("PRIMARY KEY")) {
-                    System.out.println("[SKIP] Dosen " + dsn.getNidn() + " sudah ada di database.");
-                } else {
-                    throw e;
-                }
-            }
+            try { repoDsn.save(dsn); total++; }
+            catch (SQLException e) { skipOrThrow(e, "Dosen", dsn.getNidn()); }
         }
-
-        // ORM + JDBC: Objek MataKuliah → INSERT SQL
         for (MataKuliah mk : bufferMataKuliah) {
-            try {
-                AkademikORM.insertMataKuliah(mk);
-                total++;
-            } catch (SQLException e) {
-                if (e.getMessage().contains("UNIQUE") || e.getMessage().contains("PRIMARY KEY")) {
-                    System.out.println("[SKIP] Mata kuliah " + mk.getKode() + " sudah ada di database.");
-                } else {
-                    throw e;
-                }
-            }
+            try { repoMK.save(mk); total++; }
+            catch (SQLException e) { skipOrThrow(e, "MataKuliah", mk.getKode()); }
         }
-
-        // ORM + JDBC: Objek Nilai → INSERT/REPLACE SQL
         for (Nilai n : bufferNilai) {
-            AkademikORM.insertNilai(n);
-            total++;
+            repoNilai.save(n); total++;
         }
 
         System.out.println("[OK] " + total + " record berhasil disimpan ke database.");
+        clearBuffer();
+    }
 
-        // Bersihkan buffer setelah flush
-        bufferMahasiswa.clear();
-        bufferDosen.clear();
-        bufferMataKuliah.clear();
-        bufferNilai.clear();
+    private static void skipOrThrow(SQLException e, String tipe, String id) {
+        String msg = e.getMessage();
+        if (msg != null && (msg.contains("UNIQUE") || msg.contains("PRIMARY KEY")))
+            System.out.println("[SKIP] " + tipe + " " + id + " sudah ada di database.");
+        else
+            System.out.println("[ERROR] " + tipe + " " + id + ": " + msg);
+    }
+
+    private static void clearBuffer() {
+        bufferMahasiswa.clear(); bufferDosen.clear();
+        bufferMataKuliah.clear(); bufferNilai.clear();
+        mapMahasiswa.clear(); mapMataKuliah.clear();
         System.out.println("[OK] Buffer memori dibersihkan.\n");
     }
 
-    /**
-     * CETAK_TRANSKRIP#NIM
-     * Menggabungkan semua 4 konsep:
-     * - JDBC: query JOIN ke database
-     * - ORM: ResultSet → objek Nilai (dengan data MataKuliah)
-     * - JCF: hasil ditampung di ArrayList, lalu diiterasi
-     * - Inheritance: data mahasiswa diambil sebagai CivitasAkademika
-     */
-    private static void handleCetakTranskrip(String[] token) throws SQLException {
-        if (token.length < 2) {
-            System.out.println("[ERROR] Format: CETAK_TRANSKRIP#NIM");
-            return;
-        }
-        String nim = token[1];
+    // ===================================================================
+    //  HANDLER CETAK TRANSKRIP
+    // ===================================================================
 
-        // ORM: query database → objek Mahasiswa
-        Mahasiswa mhs = AkademikORM.selectMahasiswaByNim(nim);
-        if (mhs == null) {
-            System.out.println("[ERROR] Mahasiswa dengan NIM " + nim + " tidak ditemukan.");
-            return;
+    private static void handleCetakTranskrip(String[] t) throws SQLException {
+        if (t.length < 2) { System.out.println("[ERROR] Format: CETAK_TRANSKRIP#NIM"); return; }
+        String nim = t[1].trim();
+
+        Optional<Mahasiswa> mhsOpt = repoMhs.findById(nim);
+        if (mhsOpt.isEmpty()) {
+            System.out.println("[ERROR] Mahasiswa NIM " + nim + " tidak ditemukan."); return;
         }
 
-        // ORM + JDBC: query JOIN → List<Nilai> (JCF)
-        List<Nilai> daftarNilai = AkademikORM.selectNilaiByNim(nim);
+        List<Nilai> daftarNilai = repoNilai.findByNim(nim);
+        Optional<RingkasanTranskrip> rOpt = repoNilai.getRingkasanTranskrip(nim);
 
-        // Cetak header transkrip
+        // [11] ANONYMOUS CLASS — sort nilai by kode MK
+        daftarNilai.sort(new Comparator<Nilai>() {
+            @Override public int compare(Nilai a, Nilai b) {
+                return a.getKodeMK().compareTo(b.getKodeMK());
+            }
+        });
+
         System.out.println();
         System.out.println("====================================================");
         System.out.println("           TRANSKRIP NILAI AKADEMIK");
         System.out.println("====================================================");
-        System.out.println("NIM    : " + mhs.getNim());
-        System.out.println("Nama   : " + mhs.getNama());
-        System.out.println("Prodi  : " + mhs.getProdi());
-        // Polymorphism: memanggil getPeran() dari subclass
-        System.out.println("Status : " + mhs.getPeran());
+        // [3] POLYMORPHISM — cetak() dipanggil via parent abstract / interface
+        mhsOpt.get().cetak();
         System.out.println("====================================================");
-        System.out.printf("%-10s %-30s %5s %6s %6s%n",
-                "Kode", "Mata Kuliah", "SKS", "Nilai", "Bobot");
+        System.out.printf("%-10s %-32s %5s %6s %6s%n",
+            "Kode", "Mata Kuliah", "SKS", "Nilai", "Bobot");
         System.out.println("----------------------------------------------------");
 
-        // JCF: iterasi ArrayList untuk menghitung total SKS dan total bobot
-        int totalSKS = 0;
-        double totalBobot = 0.0;
-
+        // [3] POLYMORPHISM — n.cetak() / getRingkasan() via Printable interface
         for (Nilai n : daftarNilai) {
-            System.out.printf("%-10s %-30s %3d   %-5s  %.1f%n",
-                    n.getKodeMK(),
-                    n.getNamaMK(),
-                    n.getSks(),
-                    n.getHurufMutu(),
-                    n.getBobot());
-            totalSKS += n.getSks();
-            totalBobot += n.getBobot() * n.getSks();
+            System.out.printf("%-10s %-32s %3d   %-5s  %.1f%n",
+                n.getKodeMK(), n.getNamaMK(), n.getSks(),
+                n.getHurufMutu().name(), n.getBobot());
         }
 
-        // Hitung IPK
-        double ipk = (totalSKS > 0) ? totalBobot / totalSKS : 0.0;
-
         System.out.println("----------------------------------------------------");
-        System.out.printf("Total SKS : %d%n", totalSKS);
-        System.out.printf("IPK       : %.2f%n", ipk);
+        // [7] RECORD — akses field immutable RingkasanTranskrip
+        rOpt.ifPresentOrElse(r -> {
+            System.out.printf("Total SKS : %d%n",     r.totalSks());
+            System.out.printf("IPK       : %s%n",     r.getIpkFormatted());
+            System.out.printf("Predikat  : %s%n",     r.getPredikat());
+        }, () -> {
+            System.out.println("Total SKS : 0");
+            System.out.println("IPK       : 0.00");
+        });
         System.out.println("====================================================");
         System.out.println();
     }
 
-    /**
-     * LIHAT_SEMUA — Menampilkan seluruh data dari database.
-     * JCF: data ditampung di ArrayList hasil query ORM.
-     */
+    // ===================================================================
+    //  HANDLER LIHAT SEMUA
+    // ===================================================================
+
     private static void handleLihatSemua() throws SQLException {
+        List<Mahasiswa>  mhsList = repoMhs.findAll();
+        List<Dosen>      dsnList = repoDsn.findAll();
+        List<MataKuliah> mkList  = repoMK.findAll();
+
+        // [11] ANONYMOUS CLASS — helper cetak section header
+        Runnable cetakPemisah = new Runnable() {
+            @Override public void run() {
+                System.out.println("  --------------------------------------------------");
+            }
+        };
+
         System.out.println("\n--- Data Mahasiswa (dari Database) ---");
-        // ORM + JCF: ResultSet → ArrayList<Mahasiswa>
-        List<Mahasiswa> mahasiswaList = AkademikORM.selectAllMahasiswa();
-        if (mahasiswaList.isEmpty()) {
-            System.out.println("  (belum ada data)");
-        }
-        for (Mahasiswa m : mahasiswaList) {
-            // Inheritance: memanggil toString() yang di-override
-            System.out.println("  " + m);
-        }
+        cetakPemisah.run();
+        if (mhsList.isEmpty()) System.out.println("  (belum ada data)");
+        // [3] POLYMORPHISM — getRingkasan() dipanggil via Printable interface
+        mhsList.forEach(m -> System.out.println(m.getRingkasan()));
 
         System.out.println("\n--- Data Dosen (dari Database) ---");
-        List<Dosen> dosenList = AkademikORM.selectAllDosen();
-        if (dosenList.isEmpty()) {
-            System.out.println("  (belum ada data)");
-        }
-        for (Dosen d : dosenList) {
-            System.out.println("  " + d);
-        }
+        cetakPemisah.run();
+        if (dsnList.isEmpty()) System.out.println("  (belum ada data)");
+        dsnList.forEach(d -> System.out.println(d.getRingkasan()));
 
         System.out.println("\n--- Data Mata Kuliah (dari Database) ---");
-        List<MataKuliah> mkList = AkademikORM.selectAllMataKuliah();
-        if (mkList.isEmpty()) {
-            System.out.println("  (belum ada data)");
-        }
-        for (MataKuliah mk : mkList) {
-            System.out.println("  " + mk);
-        }
+        cetakPemisah.run();
+        if (mkList.isEmpty()) System.out.println("  (belum ada data)");
+        mkList.forEach(mk -> System.out.println(mk.getRingkasan()));
+
         System.out.println();
+    }
+
+    // ===================================================================
+    //  HANDLER HAPUS
+    // ===================================================================
+
+    private static void handleHapusMahasiswa(String[] t) throws SQLException {
+        if (t.length < 2) { System.out.println("[ERROR] Format: HAPUS_MAHASISWA#NIM"); return; }
+        String nim = t[1].trim();
+        if (!repoMhs.existsById(nim)) {
+            System.out.println("[ERROR] Mahasiswa NIM " + nim + " tidak ditemukan."); return;
+        }
+        repoMhs.deleteById(nim);
+        System.out.println("[OK] Mahasiswa NIM " + nim + " dan nilainya berhasil dihapus.");
+    }
+
+    private static void handleHapusDosen(String[] t) throws SQLException {
+        if (t.length < 2) { System.out.println("[ERROR] Format: HAPUS_DOSEN#NIDN"); return; }
+        String nidn = t[1].trim();
+        if (!repoDsn.existsById(nidn)) {
+            System.out.println("[ERROR] Dosen NIDN " + nidn + " tidak ditemukan."); return;
+        }
+        repoDsn.deleteById(nidn);
+        System.out.println("[OK] Dosen NIDN " + nidn + " berhasil dihapus.");
+    }
+
+    private static void handleHapusMataKuliah(String[] t) throws SQLException {
+        if (t.length < 2) { System.out.println("[ERROR] Format: HAPUS_MATAKULIAH#Kode"); return; }
+        String kode = t[1].trim();
+        if (!repoMK.existsById(kode)) {
+            System.out.println("[ERROR] MataKuliah " + kode + " tidak ditemukan."); return;
+        }
+        repoMK.deleteById(kode);
+        System.out.println("[OK] MataKuliah " + kode + " dan nilainya berhasil dihapus.");
+    }
+
+    private static void handleHapusNilai(String[] t) throws SQLException {
+        if (t.length < 3) { System.out.println("[ERROR] Format: HAPUS_NILAI#NIM#KodeMK"); return; }
+        repoNilai.deleteByNimAndKode(t[1].trim(), t[2].trim());
+        System.out.println("[OK] Nilai NIM " + t[1].trim() + " | MK " + t[2].trim() + " dihapus.");
     }
 }

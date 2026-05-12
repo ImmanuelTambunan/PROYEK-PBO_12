@@ -1,6 +1,6 @@
 compile:
 	@if not exist bin mkdir bin
-	javac -d bin -cp "lib/*" src/academic/model/*.java src/academic/driver/*.java
+	powershell -NoProfile -Command "$$files = Get-ChildItem -Recurse -Filter *.java src | ForEach-Object { $$_.FullName }; javac -d bin -cp 'lib/*' $$files"
 
 run: compile
 	java -cp "bin;lib/*" academic.driver.Driver1

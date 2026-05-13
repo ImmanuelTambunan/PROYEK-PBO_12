@@ -104,11 +104,6 @@ public class Driver1 {
     //  yang hanya hidup dalam scope method ini
     // ===================================================================
     private static void tampilkanMenu() {
-        /**
-         * MenuFormatter adalah LOCAL CLASS — hanya visible di dalam method ini.
-         * Bertugas memformat tampilan menu secara konsisten.
-         * Konsep: [10] LOCAL CLASS
-         */
         class MenuFormatter {
             static final String LINE = "  ----------------------------------------";
 
@@ -217,7 +212,6 @@ public class Driver1 {
 
         // ================================================================
         //  [11] ANONYMOUS CLASS — Printable anonim untuk tampilkan info enum
-        //  Tidak perlu buat class baru hanya untuk fungsi display sekali pakai.
         // ================================================================
         Printable infoHurufMutu = new Printable() {
             @Override
@@ -230,7 +224,7 @@ public class Driver1 {
             }
             @Override public String getRingkasan() { return "Info HurufMutu"; }
         };
-        infoHurufMutu.cetak(); // [3] POLYMORPHISM — dipanggil via interface
+        infoHurufMutu.cetak(); // [3] POLYMORPHISM
 
         System.out.print("\n  NIM Mahasiswa : "); String nim   = scanner.nextLine().trim();
         System.out.print("  Kode MK       : "); String kode  = scanner.nextLine().trim();
@@ -305,7 +299,7 @@ public class Driver1 {
     }
 
     private static void prosesPerintahLangsung(String line) {
-        String[] token   = line.split("#");
+        String[] token    = line.split("#");
         String   perintah = token[0].trim().toUpperCase();
         try {
             switch (perintah) {
@@ -446,6 +440,7 @@ public class Driver1 {
             return;
         }
 
+        Mahasiswa mhs = mhsOpt.get();
         List<Nilai> daftarNilai = repoNilai.findByNim(nim);
         Optional<RingkasanTranskrip> rOpt = repoNilai.getRingkasanTranskrip(nim);
 
@@ -456,36 +451,97 @@ public class Driver1 {
             }
         });
 
-        System.out.println();
-        System.out.println("====================================================");
-        System.out.println("           TRANSKRIP NILAI AKADEMIK");
-        System.out.println("====================================================");
-        // [3] POLYMORPHISM — cetak() dipanggil via parent abstract / interface
-        mhsOpt.get().cetak();
-        System.out.println("====================================================");
-        System.out.printf("%-10s %-32s %5s %6s %6s%n",
-            "Kode", "Mata Kuliah", "SKS", "Nilai", "Bobot");
-        System.out.println("----------------------------------------------------");
+        // ================================================================
+        //  Bangun konten transkrip ke List<String>
+        //  Dipakai untuk: (1) cetak ke konsol, (2) export ke file .txt
+        //  Memisahkan tanggung jawab pembentukan konten dari output-nya.
+        // ================================================================
+        List<String> baris = new ArrayList<>();
+        baris.add("====================================================");
+        baris.add("           TRANSKRIP NILAI AKADEMIK");
+        baris.add("           Sistem Informasi Akademik");
+        baris.add("====================================================");
+        baris.add(String.format("NIM      : %s", mhs.getNim()));
+        baris.add(String.format("Nama     : %s", mhs.getNama()));
+        baris.add(String.format("Prodi    : %s", mhs.getProdi()));
+        baris.add(String.format("Status   : %s", mhs.getStatus().getLabel()));
+        baris.add("====================================================");
+        baris.add(String.format("%-10s %-32s %5s %6s %6s",
+            "Kode", "Mata Kuliah", "SKS", "Nilai", "Bobot"));
+        baris.add("----------------------------------------------------");
 
-        // [3] POLYMORPHISM — n.cetak() / getRingkasan() via Printable interface
+        // [3] POLYMORPHISM — iterasi List<Nilai>
         for (Nilai n : daftarNilai) {
-            System.out.printf("%-10s %-32s %3d   %-5s  %.1f%n",
+            baris.add(String.format("%-10s %-32s %3d   %-5s  %.1f",
                 n.getKodeMK(), n.getNamaMK(), n.getSks(),
-                n.getHurufMutu().name(), n.getBobot());
+                n.getHurufMutu().name(), n.getBobot()));
         }
 
-        System.out.println("----------------------------------------------------");
+        baris.add("----------------------------------------------------");
+
         // [7] RECORD — akses field immutable RingkasanTranskrip
         rOpt.ifPresentOrElse(r -> {
-            System.out.printf("Total SKS : %d%n",     r.totalSks());
-            System.out.printf("IPK       : %s%n",     r.getIpkFormatted());
-            System.out.printf("Predikat  : %s%n",     r.getPredikat());
+            baris.add(String.format("Total SKS : %d",   r.totalSks()));
+            baris.add(String.format("IPK       : %s",   r.getIpkFormatted()));
+            baris.add(String.format("Predikat  : %s",   r.getPredikat()));
         }, () -> {
-            System.out.println("Total SKS : 0");
-            System.out.println("IPK       : 0.00");
+            baris.add("Total SKS : 0");
+            baris.add("IPK       : 0.00");
+            baris.add("Predikat  : -");
         });
-        System.out.println("====================================================");
+
+        baris.add("====================================================");
+
+        // Timestamp cetak
+        String waktu = new java.text.SimpleDateFormat("dd-MM-yyyy HH:mm:ss")
+            .format(new java.util.Date());
+        baris.add("Dicetak pada : " + waktu);
+        baris.add("====================================================");
+
+        // ----------------------------------------------------------------
+        //  (1) Cetak ke konsol
+        // ----------------------------------------------------------------
         System.out.println();
+        baris.forEach(System.out::println);
+        System.out.println();
+
+        // ----------------------------------------------------------------
+        //  (2) Tanya user: export ke .txt?
+        // ----------------------------------------------------------------
+        System.out.print("  Export transkrip ke file .txt? (y/n): ");
+        String jawab = scanner.nextLine().trim();
+        if (jawab.equalsIgnoreCase("y")) {
+            exportTranskrip(nim, baris);
+        }
+    }
+
+    /**
+     * Export isi transkrip ke file teks.
+     * File disimpan di folder "transkrip/" dengan nama:
+     * transkrip_NIM_ddMMyyyy_HHmmss.txt
+     */
+    private static void exportTranskrip(String nim, List<String> baris) {
+        // Buat folder transkrip/ jika belum ada
+        java.io.File folder = new java.io.File("transkrip");
+        if (!folder.exists()) folder.mkdir();
+
+        // Nama file unik: NIM + timestamp
+        String timestamp = new java.text.SimpleDateFormat("ddMMyyyy_HHmmss")
+            .format(new java.util.Date());
+        String namaFile = "transkrip" + java.io.File.separator
+            + "transkrip_" + nim + "_" + timestamp + ".txt";
+
+        // Tulis ke file menggunakan BufferedWriter
+        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(
+                new java.io.FileWriter(namaFile))) {
+            for (String b : baris) {
+                bw.write(b);
+                bw.newLine();
+            }
+            System.out.println("[OK] Transkrip berhasil diekspor ke: " + namaFile);
+        } catch (java.io.IOException e) {
+            System.out.println("[ERROR] Gagal export transkrip: " + e.getMessage());
+        }
     }
 
     // ===================================================================
@@ -497,7 +553,7 @@ public class Driver1 {
         List<Dosen>      dsnList = repoDsn.findAll();
         List<MataKuliah> mkList  = repoMK.findAll();
 
-        // [11] ANONYMOUS CLASS — helper cetak section header
+        // [11] ANONYMOUS CLASS — Runnable pemisah section
         Runnable cetakPemisah = new Runnable() {
             @Override public void run() {
                 System.out.println("  --------------------------------------------------");
@@ -507,7 +563,7 @@ public class Driver1 {
         System.out.println("\n--- Data Mahasiswa (dari Database) ---");
         cetakPemisah.run();
         if (mhsList.isEmpty()) System.out.println("  (belum ada data)");
-        // [3] POLYMORPHISM — getRingkasan() dipanggil via Printable interface
+        // [3] POLYMORPHISM — getRingkasan() via Printable interface
         mhsList.forEach(m -> System.out.println(m.getRingkasan()));
 
         System.out.println("\n--- Data Dosen (dari Database) ---");

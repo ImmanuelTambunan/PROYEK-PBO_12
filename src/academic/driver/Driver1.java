@@ -560,22 +560,63 @@ public class Driver1 {
             }
         };
 
-        System.out.println("\n--- Data Mahasiswa (dari Database) ---");
-        cetakPemisah.run();
-        if (mhsList.isEmpty()) System.out.println("  (belum ada data)");
-        // [3] POLYMORPHISM — getRingkasan() via Printable interface
-        mhsList.forEach(m -> System.out.println(m.getRingkasan()));
+        // Cek apakah semua tabel kosong
+        if (mhsList.isEmpty() && dsnList.isEmpty() && mkList.isEmpty()) {
+            System.out.println();
+            System.out.println("  ====================================================");
+            System.out.println("  [INFO] Database masih kosong.");
+            System.out.println("  Gunakan menu [1]-[4] untuk menambah data,");
+            System.out.println("  lalu pilih [5] Simpan ke Database terlebih dahulu.");
+            System.out.println("  ====================================================");
+            System.out.println();
+            return;
+        }
 
-        System.out.println("\n--- Data Dosen (dari Database) ---");
-        cetakPemisah.run();
-        if (dsnList.isEmpty()) System.out.println("  (belum ada data)");
-        dsnList.forEach(d -> System.out.println(d.getRingkasan()));
+        System.out.println();
+        System.out.println("  ====================================================");
+        System.out.println("           SELURUH DATA AKADEMIK");
+        System.out.println("  ====================================================");
 
-        System.out.println("\n--- Data Mata Kuliah (dari Database) ---");
+        // --- Mahasiswa ---
+        System.out.println("\n  DATA MAHASISWA (" + mhsList.size() + " record)");
         cetakPemisah.run();
-        if (mkList.isEmpty()) System.out.println("  (belum ada data)");
-        mkList.forEach(mk -> System.out.println(mk.getRingkasan()));
+        if (mhsList.isEmpty()) {
+            System.out.println("  (belum ada data)");
+        } else {
+            System.out.printf("  %-12s | %-28s | %-22s | %s%n",
+                "NIM", "Nama", "Prodi", "Status");
+            cetakPemisah.run();
+            // [3] POLYMORPHISM — getRingkasan() via Printable interface
+            mhsList.forEach(m -> System.out.println(m.getRingkasan()));
+        }
 
+        // --- Dosen ---
+        System.out.println("\n  DATA DOSEN (" + dsnList.size() + " record)");
+        cetakPemisah.run();
+        if (dsnList.isEmpty()) {
+            System.out.println("  (belum ada data)");
+        } else {
+            System.out.printf("  %-12s | %-28s | %s%n", "NIDN", "Nama", "Fakultas");
+            cetakPemisah.run();
+            dsnList.forEach(d -> System.out.println(d.getRingkasan()));
+        }
+
+        // --- Mata Kuliah ---
+        System.out.println("\n  DATA MATA KULIAH (" + mkList.size() + " record)");
+        cetakPemisah.run();
+        if (mkList.isEmpty()) {
+            System.out.println("  (belum ada data)");
+        } else {
+            System.out.printf("  %-8s | %-35s | %s%n", "Kode", "Nama", "SKS");
+            cetakPemisah.run();
+            mkList.forEach(mk -> System.out.println(mk.getRingkasan()));
+        }
+
+        System.out.println();
+        System.out.println("  ====================================================");
+        System.out.printf("  Total: %d Mahasiswa | %d Dosen | %d Mata Kuliah%n",
+            mhsList.size(), dsnList.size(), mkList.size());
+        System.out.println("  ====================================================");
         System.out.println();
     }
 
